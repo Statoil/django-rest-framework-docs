@@ -152,7 +152,22 @@ class DocumentationGenerator():
                 if len(params) == 2:
                     _params.append([params[0].strip(), params[1].strip()])
 
-            return {'description': description, 'params': _params}
+
+            http_methods = ["GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD", "PATCH"]
+            split_lines = description.split('\n')
+            methods = {}
+            docstr = ""
+            for line in split_lines:
+                found = False
+                for method in http_methods:
+                    if line.startswith(method + ":"):
+                        methods[method] = line.replace(method + ":", "").strip()
+                        found = True
+                if not found:
+                    docstr += line + "\n"
+            description = self._trim(docstr)
+
+            return {'description': description, 'params': _params, "methods": methods}
         except:
             return None
 
@@ -246,12 +261,12 @@ class DocumentationGenerator():
             stripped = line.lstrip()
             if stripped:
                 indent = min(indent, len(line) - len(stripped))
-            # Remove indentation (first line is special):
+                # Remove indentation (first line is special):
         trimmed = [lines[0].strip()]
         if indent < sys.maxint:
             for line in lines[1:]:
                 trimmed.append(line[indent:].rstrip())
-            # Strip off trailing and leading blank lines:
+                # Strip off trailing and leading blank lines:
         while trimmed and not trimmed[-1]:
             trimmed.pop()
         while trimmed and not trimmed[0]:

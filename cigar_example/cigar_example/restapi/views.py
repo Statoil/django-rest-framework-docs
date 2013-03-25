@@ -26,6 +26,10 @@ class CigarDetails(RetrieveUpdateDestroyAPIView):
 class ManufacturerList(ListCreateAPIView):
     """
     Gets the list of cigar manufacturers from the database.
+
+    GET: This is the description for GET on ManufacturerList
+    POST: This is the description for Post on ManufacturerList
+
     """
     model = Manufacturer
     serializer_class = ManufacturerSerializer
@@ -33,6 +37,12 @@ class ManufacturerList(ListCreateAPIView):
 class ManufacturerDetails(RetrieveUpdateDestroyAPIView):
     """
     Returns the details on a manufacturer
+
+    GET: This is the description for get on ManufacturerDetail
+    PUT: This is the description for put on ManufacturerDetail
+    PATCH: This is the description for put on ManufacturerDetail
+    DELETE: This is the description for delete on ManufacturerDetail
+
     """
     model = Manufacturer
     serializer_class = ManufacturerSerializer
@@ -40,6 +50,10 @@ class ManufacturerDetails(RetrieveUpdateDestroyAPIView):
 class CountryList(ListCreateAPIView):
     """
     Gets a list of countries. Allows the creation of a new country.
+
+    GET: Gets a list of countries.
+    POST: Allows the creation of a new country.
+
     """
     model = Countries
     serializer_class = CountrySerializer

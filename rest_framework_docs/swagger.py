@@ -32,7 +32,6 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
             return jsonpickle.encode(response, unpicklable=False)
 
         raise Http404
-        #
 
     def __create_base_response(self):
         return {
@@ -44,7 +43,6 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
 
     def __process_urlpatterns(self):
         """ Assembles ApiDocObject """
-        docs = []
 
         base_apis = defaultdict(list)
         for endpoint in self.urlpatterns:
@@ -52,8 +50,6 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
             base_apis[base_path].append(self.__create_apis(endpoint, base_path))
 
         return base_apis
-        #for base_api in base_apis:
-
 
     def __create_apis(self, endpoint, base_path):
         if not endpoint.callback:
@@ -78,21 +74,29 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
     def __create_operations(self, endpoint, sub):
         allowed_methods = self.__get_allowed_methods__(endpoint)
         parsed_docstring = self.__parse_docstring__(endpoint)
-        title = self.__get_title__(endpoint)
 
         operations = []
         for method in allowed_methods:
             operation = self.SwaggerApiOperation()
             operation.method = method
 
-            method_doc = self.__get_operation_docstring(endpoint, method)
-            if method_doc and method_doc['description'] != "":
-                operation.summary = method_doc['description']
-            else:
-                operation.summary = parsed_docstring['description']
+            operation.summary = self.__get_summary(parsed_docstring, endpoint, method)
             operation.nickname = sub + "_"+ method
             operations.append(operation)
         return operations
+
+
+    def __get_summary(self, parsed_docstring, endpoint, method):
+
+        if method in parsed_docstring["methods"]:
+            return parsed_docstring["methods"][method]
+
+        method_doc = self.__get_operation_docstring(endpoint, method)
+        if method_doc and method_doc['description'] != "":
+            return method_doc['description']
+
+        return parsed_docstring['description']
+
 
     def __get_operation_docstring(self, endpoint, method):
         try:
@@ -151,5 +155,4 @@ class ApiViewWithDoc(APIView):
         return view
 
     def get_doc_for_method(self, method):
-        print method
         return getattr(self, method.lower()).__doc__
