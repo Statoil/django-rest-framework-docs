@@ -37,7 +37,7 @@ class DocumentationGenerator():
         for pattern in patterns:
             # If this is a CBV, check if it is an APIView
             if (hasattr(pattern.callback, 'cls_instance') and
-                 issubclass(pattern.callback.cls_instance.__class__, APIView)):
+                issubclass(pattern.callback.cls_instance.__class__, APIView)):
                 api_url_patterns.append(pattern)
 
         # get only unique-named patterns, its, because rest_framework can add
@@ -118,9 +118,9 @@ class DocumentationGenerator():
         Gets the URL Pattern name and make it the title
         """
         try:
-                name = endpoint.name
-                title = re.sub('[-_]', ' ', name)
-                return title.title()
+            name = endpoint.name
+            title = re.sub('[-_]', ' ', name)
+            return title.title()
         except:
             return None
 
@@ -135,7 +135,7 @@ class DocumentationGenerator():
 
         try:  # Get API Doc String
             docstring = endpoint.callback.__doc__
-            description = self.__trim(docstring)
+            description = self._trim(docstring)
             split_lines = description.split('\n')
             trimmed = False  # Flag if string needs to be trimmed
             _params = []
@@ -230,14 +230,14 @@ class DocumentationGenerator():
         except:
             return None
 
-    def __trim(self, docstring):
+    def _trim(self, docstring):
         """
         Trims whitespace from the docstring in accordance to the PEP-257 standard
         From: http://www.python.org/dev/peps/pep-0257/#multi-line-docstrings
         """
         if not docstring:
             return ''
-        # Convert tabs to spaces (following the normal Python rules)
+            # Convert tabs to spaces (following the normal Python rules)
         # and split into a list of lines:
         lines = docstring.expandtabs().splitlines()
         # Determine minimum indentation (first line doesn't count):
@@ -246,17 +246,17 @@ class DocumentationGenerator():
             stripped = line.lstrip()
             if stripped:
                 indent = min(indent, len(line) - len(stripped))
-        # Remove indentation (first line is special):
+            # Remove indentation (first line is special):
         trimmed = [lines[0].strip()]
         if indent < sys.maxint:
             for line in lines[1:]:
                 trimmed.append(line[indent:].rstrip())
-        # Strip off trailing and leading blank lines:
+            # Strip off trailing and leading blank lines:
         while trimmed and not trimmed[-1]:
             trimmed.pop()
         while trimmed and not trimmed[0]:
             trimmed.pop(0)
-        # Return a single string:
+            # Return a single string:
         return '\n'.join(trimmed)
 
     class ApiDocObject(object):

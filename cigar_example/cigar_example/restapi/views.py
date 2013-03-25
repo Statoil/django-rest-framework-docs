@@ -2,7 +2,7 @@ from rest_framework.views import Response, APIView
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from cigar_example.app.models import Cigar, Manufacturer, Countries
 from serializers import CigarSerializer, ManufacturerSerializer, CountrySerializer
-
+from rest_framework_docs.swagger import ApiViewWithDoc
 
 class CigarList(ListCreateAPIView):
     """
@@ -51,7 +51,9 @@ class CountryDetails(RetrieveUpdateDestroyAPIView):
     model = Countries
     serializer_class = CountrySerializer
 
-class MyCustomView(APIView):
+
+
+class MyCustomView(ApiViewWithDoc):
     """
     This is a custom view that can be anything at all. It's not using a serializer class,
     but I can define my own parameters like so!
@@ -59,8 +61,14 @@ class MyCustomView(APIView):
     horse -- the name of your horse
 
     """
+
     def get(self, *args, **kwargs):
-        """ Docs there """
+        """
+        Docs there
+        """
         return Response({'foo':'bar'})
+
     def post(self, *args, **kwargs):
         pass
+
+
