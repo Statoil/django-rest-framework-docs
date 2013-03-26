@@ -77,7 +77,6 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         except AttributeError:
             model = None
 
-
         doc = self.ApiSwaggerDocObject()
         doc.path = sub
         parsed_docstring = self.__parse_docstring__(endpoint)
@@ -100,23 +99,14 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         except AttributeError:
             pass
 
-        try:
-            model = model.__name__
-            if list:
-                model = "Array[" + model + "]"
-        except AttributeError:
-            model = None
-
-
-
         operations = []
         for method in allowed_methods:
             operation = self.SwaggerApiOperation()
             operation.method = method
             operation.summary = self.__get_summary(parsed_docstring, endpoint, method)
             operation.nickname = method
-            if method == "GET":
-                operation.response_class = model
+            operation.is_list = list
+            operation.model = model
             operations.append(operation)
         return operations
 
@@ -198,9 +188,25 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         response_class = None
         nickname = None
         parameters = []
+        model = None
 
         def as_dict(self):
-            return {"httpMethod": self.method, "summary": self.summary, "nickname": self.nickname, "responseClass": self.response_class}
+
+            return {"httpMethod": self.method, "summary": self.summary, "nickname": self.nickname, "responseClass": self.get_response_class()}
+
+        def get_parameters(self):
+            return self.parameters
+
+        def get_response_class(self):
+            if self.method != "GET":
+                return None
+            try:
+                response_class =  self.model.__name__
+                if self.is_list:
+                    response_class = "Array[" + response_class + "]"
+                return response_class
+            except AttributeError:
+                return None
 
 
 class ApiViewWithDoc(APIView):
