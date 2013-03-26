@@ -96,8 +96,8 @@ class MyCustomViewGet(APIView):
         """
         Doc for custom things
 
-        my_param2 -- path, String
-        my_param -- query, Int, optional
+        my_param2 -- path, String, desc
+        my_param -- query, Int, desc, optional
 
         """
         return Response({'foo':'bar'})

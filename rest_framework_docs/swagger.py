@@ -234,23 +234,16 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         for endpoint in self.urlpatterns:
             if endpoint.callback:
                 path =  self.__get_path__(endpoint)
+                sub = ""
                 if "/" in path:
                     split = path.split("/", 1)
-                    base = split[0]
+                    path = split[0]
                     sub = split[1]
-                else:
-                    base = path
-                    sub = ""
 
-                child = base_api.get_child(base)
+                child = base_api.get_child(path)
                 if not child:
-                    child = Api(path=base)
+                    child = Api(path=path)
                     base_api.add_child(child)
-
-                try:
-                    view = endpoint.callback.cls_instance
-                except AttributeError:
-                    view = None
 
                 api = Api(
                     path = sub,
