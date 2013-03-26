@@ -50,8 +50,6 @@ class Api(object):
         if doc and doc["description"]:
             summary = doc["description"]
 
-
-
         model = self.__get_model()
 
         is_list = False
@@ -93,9 +91,10 @@ class Api(object):
         attrs = param[1].split(",")
         param_type = attrs[0].strip()
         type = attrs[1].strip()
+        description = attrs[2].strip()
+        required = True
         try:
-            required = True
-            required_text = attrs[2]
+            required_text = attrs[3]
             if required_text.strip() == "optional":
                 required = False
         except Exception, e:
@@ -105,7 +104,8 @@ class Api(object):
             data_type=type,
             allow_multiple=False,
             required=required,
-            name=name
+            name=name,
+            description=description
         )
 
 
@@ -134,12 +134,13 @@ class Api(object):
 
 class SwaggerParameter(object):
 
-    def __init__(self, data_type=None, allow_multiple=False, required=True, param_type="body", name="data"):
+    def __init__(self, data_type=None, allow_multiple=False, required=True, param_type="body", name="data", description=""):
         self.data_type = data_type
         self.allow_multiple = allow_multiple
         self.required = required
         self.param_type = param_type
         self.name = name
+        self.description = description
 
     def as_dict(self):
         return {
@@ -147,7 +148,8 @@ class SwaggerParameter(object):
             "allowMultiple": self.allow_multiple,
             "required": self.required,
             "paramType": self.param_type,
-            "name": self.name
+            "name": self.name,
+            "description": self.description
         }
 
 class SwaggerOperationObject(object):
@@ -211,7 +213,7 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
             if not child:
                 raise Http404
             children = child.children
-            docs_path = "/"
+            docs_path = "/" + path + "/"
         else:
             docs_path = self.docs_path
             children = self.base_api.children
