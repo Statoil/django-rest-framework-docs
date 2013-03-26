@@ -81,32 +81,37 @@ class Api(object):
             operation.add_parameter(parameter)
         if doc["params"]:
             for param in doc["params"]:
-                operation.add_parameter(self.__map_param_from_doc(param))
+                parameter = self.__map_param_from_doc(param)
+                if parameter:
+                    operation.add_parameter(parameter)
 
 
         return operation
 
     def __map_param_from_doc(self, param):
-        name = param[0]
-        attrs = param[1].split(",")
-        param_type = attrs[0].strip()
-        type = attrs[1].strip()
-        description = attrs[2].strip()
-        required = True
         try:
-            required_text = attrs[3]
-            if required_text.strip() == "optional":
-                required = False
-        except Exception, e:
-            pass
-        return SwaggerParameter(
-            param_type=param_type,
-            data_type=type,
-            allow_multiple=False,
-            required=required,
-            name=name,
-            description=description
-        )
+            name = param[0]
+            attrs = param[1].split(",")
+            param_type = attrs[0].strip()
+            type = attrs[1].strip()
+            description = attrs[2].strip()
+            required = True
+            try:
+                required_text = attrs[3]
+                if required_text.strip() == "optional":
+                    required = False
+            except IndexError:
+                pass
+            return SwaggerParameter(
+                param_type=param_type,
+                data_type=type,
+                allow_multiple=False,
+                required=required,
+                name=name,
+                description=description
+            )
+        except IndexError:
+            return None
 
 
     def __get_model(self):

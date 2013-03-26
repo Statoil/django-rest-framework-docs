@@ -96,7 +96,7 @@ class MyCustomViewGet(APIView):
         """
         Doc for custom things
 
-        my_param2 -- path, String, desc
+        my_param2 -- path, String
         my_param -- query, Int, desc, optional
 
         """
