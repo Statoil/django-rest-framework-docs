@@ -29,6 +29,16 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         if path in self.apis:
             response = self.__create_base_response()
             response["apis"] = [x.as_dict() for x in self.apis[path]]
+
+            models = {}
+            for api in response["apis"]:
+                api_models = api["models"]
+                del api["models"]
+                for key, model in api_models.iteritems():
+                    if not key in models:
+                        models[key] = model
+            response["models"] = models
+
             return jsonpickle.encode(response, unpicklable=False)
 
         raise Http404
@@ -60,30 +70,77 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         if not sub.startswith("/"):
             sub = "/" + sub
 
+        models = {}
+        try:
+            model = endpoint.callback.cls_instance.model
+            models[model.__name__] = self.__map_model(model)
+        except AttributeError:
+            model = None
+
+
         doc = self.ApiSwaggerDocObject()
         doc.path = sub
         parsed_docstring = self.__parse_docstring__(endpoint)
         doc.params = parsed_docstring['params']
-        doc.model = self.__get_model__(endpoint)
-        doc.operations = self.__create_operations(endpoint, path)
+        doc.model = model
+        doc.operations = self.__create_operations(endpoint, path, model)
         doc.description = parsed_docstring['description']
         doc.allowed_methods = self.__get_allowed_methods__(endpoint)
         doc.fields = self.__get_serializer_fields__(endpoint)
+        doc.models = models
         return doc
 
-    def __create_operations(self, endpoint, sub):
+    def __create_operations(self, endpoint, sub, model):
         allowed_methods = self.__get_allowed_methods__(endpoint)
         parsed_docstring = self.__parse_docstring__(endpoint)
+
+        list = False
+        try:
+            list = endpoint.callback.cls_instance.list
+        except AttributeError:
+            pass
+
+        try:
+            model = model.__name__
+            if list:
+                model = "Array[" + model + "]"
+        except AttributeError:
+            model = None
+
+
 
         operations = []
         for method in allowed_methods:
             operation = self.SwaggerApiOperation()
             operation.method = method
-
             operation.summary = self.__get_summary(parsed_docstring, endpoint, method)
-            operation.nickname = sub + "_"+ method
+            operation.nickname = method
+            if method == "GET":
+                operation.response_class = model
             operations.append(operation)
         return operations
+
+    def __map_model(self, model):
+
+        properties = {}
+        for field in model._meta.fields:
+            properties[field.name] = {"type": self.__map_django_model(field.get_internal_type())}
+
+        return {"id": model.__name__, "properties": properties}
+
+    def __map_django_model(self, django_model):
+        mappings = {
+            "AutoField": "int",
+            "CharField": "string",
+            "IntegerField": "int",
+            "DecimalField": "double",
+            "TextField": "string",
+            "ForeignKey": "int",
+            "BooleanField": "boolean"
+        }
+        if django_model in mappings:
+            return mappings[django_model]
+        return None
 
 
     def __get_summary(self, parsed_docstring, endpoint, method):
@@ -130,10 +187,10 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         description = None
         params = []
         operations = []
-        model = None
+        models = None
 
         def as_dict(self):
-            return {"path": self.path, "description": self.description, "operations": [operation.as_dict() for operation in self.operations if operation.method != "OPTIONS"]}
+            return {"path": self.path, "description": self.description, "models": self.models, "operations": [operation.as_dict() for operation in self.operations if operation.method != "OPTIONS"]}
 
     class SwaggerApiOperation(object):
         method = None
@@ -143,7 +200,7 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         parameters = []
 
         def as_dict(self):
-            return {"httpMethod": self.method, "summary": self.summary, "nickname": self.nickname}
+            return {"httpMethod": self.method, "summary": self.summary, "nickname": self.nickname, "responseClass": self.response_class}
 
 
 class ApiViewWithDoc(APIView):

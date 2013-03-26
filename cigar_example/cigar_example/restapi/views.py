@@ -31,6 +31,7 @@ class ManufacturerList(ListCreateAPIView):
     POST: This is the description for Post on ManufacturerList
 
     """
+    list = True
     model = Manufacturer
     serializer_class = ManufacturerSerializer
 
@@ -66,7 +67,6 @@ class CountryDetails(RetrieveUpdateDestroyAPIView):
     serializer_class = CountrySerializer
 
 
-
 class MyCustomView(ApiViewWithDoc):
     """
     This is a custom view that can be anything at all. It's not using a serializer class,
@@ -77,12 +77,33 @@ class MyCustomView(ApiViewWithDoc):
     """
 
     def get(self, *args, **kwargs):
-        """
-        Docs there
-        """
         return Response({'foo':'bar'})
 
     def post(self, *args, **kwargs):
         pass
 
+class MyCustomViewGet(ApiViewWithDoc):
+    """
+    This is a custom view that can be anything at all.
+    """
 
+    model = Countries
+
+    def get(self, *args, **kwargs):
+        """
+        Doc for custom things
+
+        Params:
+        my_param2 - path - String
+        my_param - query - Int - required
+        """
+        return Response({'foo':'bar'})
+
+
+class MyCustomViewPost(ApiViewWithDoc):
+    """
+    This is a custom view that can be anything at all.
+    """
+
+    def post(self, *args, **kwargs):
+        pass
