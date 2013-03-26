@@ -135,39 +135,7 @@ class DocumentationGenerator():
 
         try:  # Get API Doc String
             docstring = endpoint.callback.__doc__
-            description = self._trim(docstring)
-            split_lines = description.split('\n')
-            trimmed = False  # Flag if string needs to be trimmed
-            _params = []
-
-            for line in split_lines:
-                if not trimmed:
-                    needle = line.find('--')
-                    if needle != -1:
-                        trim_at = description.find(line)
-                        description = description[:trim_at]
-                        trimmed = True
-
-                params = line.split(' -- ')
-                if len(params) == 2:
-                    _params.append([params[0].strip(), params[1].strip()])
-
-
-            http_methods = ["GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD", "PATCH"]
-            split_lines = description.split('\n')
-            methods = {}
-            docstr = ""
-            for line in split_lines:
-                found = False
-                for method in http_methods:
-                    if line.startswith(method + ":"):
-                        methods[method] = line.replace(method + ":", "").strip()
-                        found = True
-                if not found:
-                    docstr += line + "\n"
-            description = self._trim(docstr)
-
-            return {'description': description, 'params': _params, "methods": methods}
+            return parse_docstring(docstring)
         except:
             return None
 
@@ -246,33 +214,7 @@ class DocumentationGenerator():
             return None
 
     def _trim(self, docstring):
-        """
-        Trims whitespace from the docstring in accordance to the PEP-257 standard
-        From: http://www.python.org/dev/peps/pep-0257/#multi-line-docstrings
-        """
-        if not docstring:
-            return ''
-            # Convert tabs to spaces (following the normal Python rules)
-        # and split into a list of lines:
-        lines = docstring.expandtabs().splitlines()
-        # Determine minimum indentation (first line doesn't count):
-        indent = sys.maxint
-        for line in lines[1:]:
-            stripped = line.lstrip()
-            if stripped:
-                indent = min(indent, len(line) - len(stripped))
-                # Remove indentation (first line is special):
-        trimmed = [lines[0].strip()]
-        if indent < sys.maxint:
-            for line in lines[1:]:
-                trimmed.append(line[indent:].rstrip())
-                # Strip off trailing and leading blank lines:
-        while trimmed and not trimmed[-1]:
-            trimmed.pop()
-        while trimmed and not trimmed[0]:
-            trimmed.pop(0)
-            # Return a single string:
-        return '\n'.join(trimmed)
+        return trim_docstring(docstring)
 
     class ApiDocObject(object):
         """ API Documentation Object """
@@ -282,3 +224,52 @@ class DocumentationGenerator():
         params = []
         allowed_methods = []
         model = None
+
+def parse_docstring(docstring):
+    description = trim_docstring(docstring)
+    split_lines = description.split('\n')
+    trimmed = False  # Flag if string needs to be trimmed
+    _params = []
+
+    for line in split_lines:
+        if not trimmed:
+            needle = line.find('--')
+            if needle != -1:
+                trim_at = description.find(line)
+                description = description[:trim_at]
+                trimmed = True
+
+        params = line.split(' -- ')
+        if len(params) == 2:
+            _params.append([params[0].strip(), params[1].strip()])
+    description = description.rstrip('\n')
+    return {'description': description, 'params': _params}
+
+def trim_docstring(docstring):
+    """
+    Trims whitespace from the docstring in accordance to the PEP-257 standard
+    From: http://www.python.org/dev/peps/pep-0257/#multi-line-docstrings
+    """
+    if not docstring:
+        return ''
+        # Convert tabs to spaces (following the normal Python rules)
+    # and split into a list of lines:
+    lines = docstring.expandtabs().splitlines()
+    # Determine minimum indentation (first line doesn't count):
+    indent = sys.maxint
+    for line in lines[1:]:
+        stripped = line.lstrip()
+        if stripped:
+            indent = min(indent, len(line) - len(stripped))
+            # Remove indentation (first line is special):
+    trimmed = [lines[0].strip()]
+    if indent < sys.maxint:
+        for line in lines[1:]:
+            trimmed.append(line[indent:].rstrip())
+            # Strip off trailing and leading blank lines:
+    while trimmed and not trimmed[-1]:
+        trimmed.pop()
+    while trimmed and not trimmed[0]:
+        trimmed.pop(0)
+        # Return a single string:
+    return '\n'.join(trimmed)

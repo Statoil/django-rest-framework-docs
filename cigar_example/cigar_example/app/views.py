@@ -21,8 +21,5 @@ class SwaggerApiDocumentation(APIView):
     Gets the documentation for the API endpoints
     """
     def get(self, request, match=None, *args, **kwargs):
-        if match:
-            docs = doc_generator.get_apis(match)
-        else:
-            docs = doc_generator.get_docs()
+        docs = doc_generator.get_docs(match)
         return Response(json.loads(docs))

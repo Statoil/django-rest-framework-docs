@@ -1,9 +1,199 @@
 from docs import DocumentationGenerator
+from docs import parse_docstring
 import jsonpickle
 from collections import defaultdict
 from django.http import Http404
 from django.utils.decorators import classonlymethod
 from rest_framework.views import APIView
+
+
+class Api(object):
+    def __init__(self, path="", description="", methods = [], docstring=None, view=None):
+        self.path = path
+        self.children = []
+        self.description = description
+        self.view = view
+        self.methods = methods
+        self.docstring = docstring
+        self.operations = []
+        self.__create_operations()
+
+    def get_child(self, path):
+        try:
+            return [child for child in self.children if child.path == path][0]
+        except IndexError:
+            return None
+
+    def add_child(self, child):
+        self.children.append(child)
+
+    def as_dict(self, docs_path):
+        if self.docstring:
+            description = self.docstring["description"]
+        else:
+            description = self.description
+
+        operations = [operation.as_dict() for operation in self.operations]
+        return {"path": docs_path + self.path, "description": description, "operations": operations}
+
+    def __create_operations(self):
+        self.operations = []
+        for method in self.methods:
+            if method != "OPTIONS":
+                self.operations.append(self.__create_operation(method))
+
+    def __create_operation(self, method):
+
+        doc = self.__parse_doc_for_method(method)
+
+        summary = None
+        if doc and doc["description"]:
+            summary = doc["description"]
+
+
+
+        model = self.__get_model()
+
+        is_list = False
+        model_type= None
+        if model:
+            model_type = model.__name__
+            try:
+                if self.view.list:
+                    is_list = True
+                    model_type = "Array[" + model_type + "]"
+            except AttributeError:
+                pass
+
+        response_class = None
+        if method == "GET" and model_type:
+            response_class = model_type
+
+        operation = SwaggerOperationObject(
+            method = method,
+            response_class = response_class,
+            summary = summary
+        )
+
+        if model_type and method in ["POST", "PUT"]:
+            parameter = SwaggerParameter(
+                 data_type=model_type,
+                 allow_multiple=is_list
+            )
+            operation.add_parameter(parameter)
+        if doc["params"]:
+            for param in doc["params"]:
+                operation.add_parameter(self.__map_param_from_doc(param))
+
+
+        return operation
+
+    def __map_param_from_doc(self, param):
+        name = param[0]
+        attrs = param[1].split(",")
+        param_type = attrs[0].strip()
+        type = attrs[1].strip()
+        try:
+            required = True
+            required_text = attrs[2]
+            if required_text.strip() == "optional":
+                required = False
+        except Exception, e:
+            pass
+        return SwaggerParameter(
+            param_type=param_type,
+            data_type=type,
+            allow_multiple=False,
+            required=required,
+            name=name
+        )
+
+
+    def __get_model(self):
+        try:
+            return self.view.model
+        except AttributeError:
+            return None
+
+    def __parse_doc_for_method(self, method):
+        docstring = getattr(self.view, method.lower()).__doc__
+        if docstring:
+            return parse_docstring(docstring)
+
+        split_lines = self.docstring["description"].split('\n')
+
+        doc = ""
+        description = ""
+        for line in split_lines:
+            if line.startswith(method + ":"):
+                doc = line.replace(method + ": ", "")
+            else:
+                description += line + "\n"
+        self.docstring["description"] = description.rstrip('\n')
+        return {"description": doc, "params": None}
+
+class SwaggerParameter(object):
+
+    def __init__(self, data_type=None, allow_multiple=False, required=True, param_type="body", name="data"):
+        self.data_type = data_type
+        self.allow_multiple = allow_multiple
+        self.required = required
+        self.param_type = param_type
+        self.name = name
+
+    def as_dict(self):
+        return {
+            "dataType": self.data_type,
+            "allowMultiple": self.allow_multiple,
+            "required": self.required,
+            "paramType": self.param_type,
+            "name": self.name
+        }
+
+class SwaggerOperationObject(object):
+
+    def __init__(self, method="GET", response_class=None, summary=None):
+        self.method = method
+        self.nickname = method
+        self.response_class = response_class
+        self.summary = summary
+        self.parameters = []
+
+    def add_parameter(self, parameter):
+        self.parameters.append(parameter)
+
+    def as_dict(self):
+        return {
+            "httpMethod": self.method,
+            "nickname": self.method,
+            "responseClass": self.response_class,
+            "summary": self.summary,
+            "parameters": [param.as_dict() for param in self.parameters]
+        }
+
+class SwaggerResponseWrapper(object):
+
+    def __init__(self, base_path="", api_version="", apis=None, docs_path="/"):
+        self.base_path = base_path
+        self.api_version = api_version
+        self.apis = apis
+        self.docs_path = docs_path
+
+    def as_dict(self):
+
+        dict = {
+            "apiVersion": self.api_version,
+            "swaggerVersion": "1.1",
+            "basePath": self.base_path ,
+            #"models": []
+        }
+
+        if self.apis:
+            dict["apis"] = [api.as_dict(docs_path=self.docs_path) for api in self.apis]
+            #if self.models:
+            #TODO: FIX MODELS!
+            #dict["models"] = [api.as_dict() for api in self.apis]
+        return dict
 
 class SwaggerDocumentationGenerator(DocumentationGenerator):
 
@@ -13,223 +203,59 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         self.base_path = base_path
         self.server_url = server_url
         self.docs_path = docs_path
-        self.apis = self.__process_urlpatterns()
+        self.base_api = self.generate_apis()
 
-    def get_docs(self):
+    def get_docs(self, path=None):
+        if path:
+            child = self.base_api.get_child(path)
+            if not child:
+                raise Http404
+            children = child.children
+            docs_path = "/"
+        else:
+            docs_path = self.docs_path
+            children = self.base_api.children
 
-        apis = [{"path": self.docs_path + api, "description":""} for api in self.apis]
+        response = SwaggerResponseWrapper(
+            base_path = self.server_url + "/" + self.base_path,
+            api_version = "2.0",
+            apis = children,
+            docs_path = docs_path
+        )
 
-        base = self.__create_base_response()
-        base["apis"] = apis
+        return jsonpickle.encode(response.as_dict(), unpicklable=False)
 
-        return jsonpickle.encode(base, unpicklable=False)
 
-    def get_apis(self, path):
+    def generate_apis(self):
 
-        if path in self.apis:
-            response = self.__create_base_response()
-            response["apis"] = [x.as_dict() for x in self.apis[path]]
-
-            models = {}
-            for api in response["apis"]:
-                api_models = api["models"]
-                del api["models"]
-                for key, model in api_models.iteritems():
-                    if not key in models:
-                        models[key] = model
-            response["models"] = models
-
-            return jsonpickle.encode(response, unpicklable=False)
-
-        raise Http404
-
-    def __create_base_response(self):
-        return {
-            "apiVersion": "1.0",
-            "swaggerVersion": "1.1",
-            "basePath": self.server_url + "/api/v2/" ,
-            "apis": []
-        }
-
-    def __process_urlpatterns(self):
-        """ Assembles ApiDocObject """
-
-        base_apis = defaultdict(list)
+        base_api = Api(path="/")
         for endpoint in self.urlpatterns:
-            base_path = self.__get_path__(endpoint).split("/")[0]
-            base_apis[base_path].append(self.__create_apis(endpoint, base_path))
+            if endpoint.callback:
+                path =  self.__get_path__(endpoint)
+                if "/" in path:
+                    split = path.split("/", 1)
+                    base = split[0]
+                    sub = split[1]
+                else:
+                    base = path
+                    sub = ""
 
-        return base_apis
+                child = base_api.get_child(base)
+                if not child:
+                    child = Api(path=base)
+                    base_api.add_child(child)
 
-    def __create_apis(self, endpoint, base_path):
-        if not endpoint.callback:
-            return None
+                try:
+                    view = endpoint.callback.cls_instance
+                except AttributeError:
+                    view = None
 
-        path = self.__get_path__(endpoint)
-        sub =  path.replace(base_path, "")
-        if not sub.startswith("/"):
-            sub = "/" + sub
+                api = Api(
+                    path = sub,
+                    methods = self.__get_allowed_methods__(endpoint),
+                    docstring = self.__parse_docstring__(endpoint),
+                    view=endpoint.callback.cls_instance
+                )
 
-        models = {}
-        try:
-            model = endpoint.callback.cls_instance.model
-            models[model.__name__] = self.__map_model(model)
-        except AttributeError:
-            model = None
-
-        doc = self.ApiSwaggerDocObject()
-        doc.path = sub
-        parsed_docstring = self.__parse_docstring__(endpoint)
-        doc.params = parsed_docstring['params']
-        doc.model = model
-        doc.operations = self.__create_operations(endpoint, path, model)
-        doc.description = parsed_docstring['description']
-        doc.allowed_methods = self.__get_allowed_methods__(endpoint)
-        doc.fields = self.__get_serializer_fields__(endpoint)
-        doc.models = models
-        return doc
-
-    def __create_operations(self, endpoint, sub, model):
-        allowed_methods = self.__get_allowed_methods__(endpoint)
-        parsed_docstring = self.__parse_docstring__(endpoint)
-
-        is_list = False
-        try:
-            is_list = endpoint.callback.cls_instance.list
-        except AttributeError:
-            pass
-
-        operations = []
-        for method in allowed_methods:
-            summary = self.__get_summary(parsed_docstring, endpoint, method)
-            operation = SwaggerApiOperation(method=method, summary=summary, model = model, is_list=is_list)
-            operation.add_parameters([]) #TODO: add other params here
-            operations.append(operation)
-        return operations
-
-    def __map_model(self, model):
-
-        properties = {}
-        for field in model._meta.fields:
-            properties[field.name] = {"type": self.__map_django_model(field.get_internal_type())}
-
-        return {"id": model.__name__, "properties": properties}
-
-    def __map_django_model(self, django_model):
-        mappings = {
-            "AutoField": "int",
-            "CharField": "string",
-            "IntegerField": "int",
-            "DecimalField": "double",
-            "TextField": "string",
-            "ForeignKey": "int",
-            "BooleanField": "boolean"
-        }
-        if django_model in mappings:
-            return mappings[django_model]
-        return None
-
-
-    def __get_summary(self, parsed_docstring, endpoint, method):
-
-        if method in parsed_docstring["methods"]:
-            return parsed_docstring["methods"][method]
-
-        method_doc = self.__get_operation_docstring(endpoint, method)
-        if method_doc and method_doc['description'] != "":
-            return method_doc['description']
-
-        return parsed_docstring['description']
-
-
-    def __get_operation_docstring(self, endpoint, method):
-        try:
-            docstring = endpoint.callback.get_doc_for_method(method)
-            description = self._trim(docstring)
-            split_lines = description.split('\n')
-            trimmed = False  # Flag if string needs to be trimmed
-            _params = []
-
-            for line in split_lines:
-                if not trimmed:
-                    needle = line.find('--')
-                    if needle != -1:
-                        trim_at = description.find(line)
-                        description = description[:trim_at]
-                        trimmed = True
-
-                params = line.split(' -- ')
-                if len(params) == 2:
-                    _params.append([params[0].strip(), params[1].strip()])
-
-            return {'description': description, 'params': _params}
-        except AttributeError, e:
-            return None
-
-
-    class ApiSwaggerDocObject(object):
-        """ API Documentation Object """
-        path = None
-        title = None
-        description = None
-        params = []
-        operations = []
-        models = None
-
-        def as_dict(self):
-            print "get as dict", self.path
-            return {"path": self.path, "description": self.description, "models": self.models, "operations": [operation.as_dict() for operation in self.operations if operation.method != "OPTIONS"]}
-
-class SwaggerApiOperation(object):
-
-    def __init__(self, method="GET", summary="", model = None, is_list=False):
-        self.method = method
-        self.summary = summary
-        self.response_class = None
-        self.nickname = method
-        self.model = model
-        self.is_list = is_list
-        self.parameters = self.__create_parameters()
-
-    def as_dict(self):
-        return {"httpMethod": self.method, "summary": self.summary, "nickname": self.nickname, "responseClass": self.get_response_class(), "parameters": self.parameters}
-
-    def add_parameters(self, parameters):
-        self.parameters += parameters
-
-    def __create_parameters(self):
-        if self.method in ["PUT", "POST"] and self.model:
-            return [{
-                "paramType": "body",
-                "name": "data",
-                "dataType": self.get_model_name(),
-                "required": True,
-                "allowMultiple": self.is_list
-            }]
-        return []
-
-    def get_response_class(self):
-        if self.method != "GET":
-            return None
-        return self.get_model_name()
-
-    def get_model_name(self):
-        try:
-            response_class = self.model.__name__
-            if self.is_list:
-                response_class = "Array[" + response_class + "]"
-            return response_class
-        except AttributeError:
-            return None
-
-
-class ApiViewWithDoc(APIView):
-    @classonlymethod
-    def as_view(cls, **initkwargs):
-        self = cls(**initkwargs)
-        view = super(ApiViewWithDoc, cls).as_view(**initkwargs)
-        view.get_doc_for_method = self.get_doc_for_method
-        return view
-
-    def get_doc_for_method(self, method):
-        return getattr(self, method.lower()).__doc__
+                child.add_child(api)
+        return base_api
