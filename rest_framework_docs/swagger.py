@@ -93,20 +93,17 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         allowed_methods = self.__get_allowed_methods__(endpoint)
         parsed_docstring = self.__parse_docstring__(endpoint)
 
-        list = False
+        is_list = False
         try:
-            list = endpoint.callback.cls_instance.list
+            is_list = endpoint.callback.cls_instance.list
         except AttributeError:
             pass
 
         operations = []
         for method in allowed_methods:
-            operation = self.SwaggerApiOperation()
-            operation.method = method
-            operation.summary = self.__get_summary(parsed_docstring, endpoint, method)
-            operation.nickname = method
-            operation.is_list = list
-            operation.model = model
+            summary = self.__get_summary(parsed_docstring, endpoint, method)
+            operation = SwaggerApiOperation(method=method, summary=summary, model = model, is_list=is_list)
+            operation.add_parameters([]) #TODO: add other params here
             operations.append(operation)
         return operations
 
@@ -180,33 +177,50 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         models = None
 
         def as_dict(self):
+            print "get as dict", self.path
             return {"path": self.path, "description": self.description, "models": self.models, "operations": [operation.as_dict() for operation in self.operations if operation.method != "OPTIONS"]}
 
-    class SwaggerApiOperation(object):
-        method = None
-        summary = None
-        response_class = None
-        nickname = None
-        parameters = []
-        model = None
+class SwaggerApiOperation(object):
 
-        def as_dict(self):
+    def __init__(self, method="GET", summary="", model = None, is_list=False):
+        self.method = method
+        self.summary = summary
+        self.response_class = None
+        self.nickname = method
+        self.model = model
+        self.is_list = is_list
+        self.parameters = self.__create_parameters()
 
-            return {"httpMethod": self.method, "summary": self.summary, "nickname": self.nickname, "responseClass": self.get_response_class()}
+    def as_dict(self):
+        return {"httpMethod": self.method, "summary": self.summary, "nickname": self.nickname, "responseClass": self.get_response_class(), "parameters": self.parameters}
 
-        def get_parameters(self):
-            return self.parameters
+    def add_parameters(self, parameters):
+        self.parameters += parameters
 
-        def get_response_class(self):
-            if self.method != "GET":
-                return None
-            try:
-                response_class =  self.model.__name__
-                if self.is_list:
-                    response_class = "Array[" + response_class + "]"
-                return response_class
-            except AttributeError:
-                return None
+    def __create_parameters(self):
+        if self.method in ["PUT", "POST"] and self.model:
+            return [{
+                "paramType": "body",
+                "name": "data",
+                "dataType": self.get_model_name(),
+                "required": True,
+                "allowMultiple": self.is_list
+            }]
+        return []
+
+    def get_response_class(self):
+        if self.method != "GET":
+            return None
+        return self.get_model_name()
+
+    def get_model_name(self):
+        try:
+            response_class = self.model.__name__
+            if self.is_list:
+                response_class = "Array[" + response_class + "]"
+            return response_class
+        except AttributeError:
+            return None
 
 
 class ApiViewWithDoc(APIView):
