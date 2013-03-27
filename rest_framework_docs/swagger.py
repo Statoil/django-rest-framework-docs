@@ -335,7 +335,8 @@ def map_django_model(django_model):
         "DecimalField": "double",
         "TextField": "string",
         "ForeignKey": "int",
-        "BooleanField": "boolean"
+        "BooleanField": "boolean",
+        "PositiveIntegerField": "int",
     }
     if django_model in mappings:
         return mappings[django_model]
