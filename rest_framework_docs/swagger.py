@@ -18,6 +18,8 @@ class Api(object):
         self.operations = []
         self.url_parameters = url_parameters
 
+        self.model = self.__map_model()
+
         #do this after all is set!
         self.__create_operations()
 
@@ -78,8 +80,9 @@ class Api(object):
 
         if model_type and method in ["POST", "PUT"]:
             parameter = SwaggerParameter(
-                 data_type=model_type,
-                 allow_multiple=is_list
+                data_type=model_type,
+                name=model_type,
+                allow_multiple=is_list
             )
             operation.add_parameter(parameter)
 
@@ -96,6 +99,20 @@ class Api(object):
                     operation.add_parameter(parameter)
 
         return operation
+
+    def __map_model(self):
+        print "map model"
+        try:
+            model = self.view.model
+            properties = {}
+            for field in model._meta.fields:
+                properties[field.name] = {"type": map_django_model(field.get_internal_type())}
+
+            return {"id": model.__name__, "properties": properties}
+
+        except Exception, e:
+            print e
+            return None
 
     def __map_param_from_doc(self, param):
         try:
@@ -200,15 +217,17 @@ class SwaggerResponseWrapper(object):
         dict = {
             "apiVersion": self.api_version,
             "swaggerVersion": "1.1",
-            "basePath": self.base_path ,
-            #"models": []
+            "basePath": self.base_path
         }
 
         if self.apis:
             dict["apis"] = [api.as_dict(docs_path=self.docs_path) for api in self.apis]
-            #if self.models:
-            #TODO: FIX MODELS!
-            #dict["models"] = [api.as_dict() for api in self.apis]
+        models = {}
+        for api in self.apis:
+            if api.model:
+                models[api.model["id"]] = api.model
+
+        dict["models"] = models
         return dict
 
 class SwaggerDocumentationGenerator(DocumentationGenerator):
@@ -272,3 +291,18 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
 
                 child.add_child(api)
         return base_api
+
+#TODO: get this from somewhere more robust
+def map_django_model(django_model):
+    mappings = {
+        "AutoField": "int",
+        "CharField": "string",
+        "IntegerField": "int",
+        "DecimalField": "double",
+        "TextField": "string",
+        "ForeignKey": "int",
+        "BooleanField": "boolean"
+    }
+    if django_model in mappings:
+        return mappings[django_model]
+    return None
