@@ -5,10 +5,10 @@ from collections import defaultdict
 from django.http import Http404
 from django.utils.decorators import classonlymethod
 from rest_framework.views import APIView
-
+import re
 
 class Api(object):
-    def __init__(self, path="", description="", methods = [], docstring=None, view=None):
+    def __init__(self, path="", description="", methods = [], docstring=None, view=None, url_parameters=None):
         self.path = path
         self.children = []
         self.description = description
@@ -16,6 +16,9 @@ class Api(object):
         self.methods = methods
         self.docstring = docstring
         self.operations = []
+        self.url_parameters = url_parameters
+
+        #do this after all is set!
         self.__create_operations()
 
     def get_child(self, path):
@@ -79,12 +82,18 @@ class Api(object):
                  allow_multiple=is_list
             )
             operation.add_parameter(parameter)
+
+        #add params from url TODO: infer type
+        if self.url_parameters:
+            for key in self.url_parameters.keys():
+                operation.add_parameter(SwaggerParameter(param_type="path", data_type="int", allow_multiple=False, name = key))
+
+        #add params from docstring
         if doc["params"]:
             for param in doc["params"]:
                 parameter = self.__map_param_from_doc(param)
                 if parameter:
                     operation.add_parameter(parameter)
-
 
         return operation
 
@@ -250,11 +259,15 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
                     child = Api(path=path)
                     base_api.add_child(child)
 
+                regex = re.compile(endpoint.regex.pattern)
+                url_params = regex.groupindex
+
                 api = Api(
                     path = sub,
                     methods = self.__get_allowed_methods__(endpoint),
                     docstring = self.__parse_docstring__(endpoint),
-                    view=endpoint.callback.cls_instance
+                    view=endpoint.callback.cls_instance,
+                    url_parameters = url_params
                 )
 
                 child.add_child(api)

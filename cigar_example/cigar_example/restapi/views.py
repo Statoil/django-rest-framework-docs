@@ -40,7 +40,7 @@ class ManufacturerDetails(RetrieveUpdateDestroyAPIView):
 
     GET: This is the description for get on ManufacturerDetail
     PUT: This is the description for put on ManufacturerDetail
-    PATCH: This is the description for put on ManufacturerDetail
+    PATCH: This is the description for patch on ManufacturerDetail
     DELETE: This is the description for delete on ManufacturerDetail
 
     """
@@ -94,9 +94,8 @@ class MyCustomViewGet(APIView):
 
     def get(self, *args, **kwargs):
         """
-        Doc for custom things
+        Doc for custom things. Do not put path params here, they are inferred from urlconf
 
-        my_param2 -- path, String
         my_param -- query, Int, desc, optional
 
         """

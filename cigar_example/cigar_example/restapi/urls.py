@@ -10,7 +10,7 @@ urlpatterns = patterns('',
     # Examples:
      url(r'^custom$', api_views.MyCustomView.as_view(), name='a-custom-view'),
      url(r'^custom2$', api_views.MyCustomViewPost.as_view(), name='a-custom-view'),
-     url(r'^custom2/(?P<pk>[^/]+)$', api_views.MyCustomViewGet.as_view(), name='a-custom-view'),
+     url(r'^custom2/(?P<test>[^/]+)/(?P<test2>[^/]+)$', api_views.MyCustomViewGet.as_view(), name='a-custom-view'),
      url(r'^cigars/?$', api_views.CigarList.as_view(), name='list_of_cigars'),
      url(r'^cigars/(?P<pk>[^/]+)/?$', api_views.CigarDetails.as_view(), name='cigar_details'),
 
