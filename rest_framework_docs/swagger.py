@@ -5,10 +5,11 @@ from collections import defaultdict
 from django.http import Http404
 from django.utils.decorators import classonlymethod
 from rest_framework.views import APIView
+from copy import deepcopy
 import re
 
 class Api(object):
-    def __init__(self, path="", description="", methods = [], docstring=None, view=None, url_parameters=None):
+    def __init__(self, path="", description="", methods = [], docstring=None, view=None, url_parameters=None, model_wrapper=None):
         self.path = path
         self.children = []
         self.description = description
@@ -17,7 +18,7 @@ class Api(object):
         self.docstring = docstring
         self.operations = []
         self.url_parameters = url_parameters
-
+        self.model_wrapper = model_wrapper
         self.model = self.__map_model()
 
         #do this after all is set!
@@ -38,7 +39,7 @@ class Api(object):
         else:
             description = self.description
 
-        operations = [operation.as_dict() for operation in self.operations]
+        operations = [operation.as_dict(model_wrapper=self.model_wrapper) for operation in self.operations]
         return {"path": docs_path + self.path, "description": description, "operations": operations}
 
     def __create_operations(self):
@@ -64,7 +65,6 @@ class Api(object):
             try:
                 if self.view.list:
                     is_list = True
-                    model_type = "Array[" + model_type + "]"
             except AttributeError:
                 pass
 
@@ -75,10 +75,15 @@ class Api(object):
         operation = SwaggerOperationObject(
             method = method,
             response_class = response_class,
-            summary = summary
+            summary = summary,
+            is_list=is_list
         )
 
+        #automagically set model as body param for POST and PUT
         if model_type and method in ["POST", "PUT"]:
+            if self.model_wrapper:
+                model_type = wrap_model_type(model_type, is_list)
+
             parameter = SwaggerParameter(
                 data_type=model_type,
                 name=model_type,
@@ -101,17 +106,13 @@ class Api(object):
         return operation
 
     def __map_model(self):
-        print "map model"
         try:
             model = self.view.model
             properties = {}
             for field in model._meta.fields:
                 properties[field.name] = {"type": map_django_model(field.get_internal_type())}
-
             return {"id": model.__name__, "properties": properties}
-
         except Exception, e:
-            print e
             return None
 
     def __map_param_from_doc(self, param):
@@ -185,59 +186,89 @@ class SwaggerParameter(object):
 
 class SwaggerOperationObject(object):
 
-    def __init__(self, method="GET", response_class=None, summary=None):
+    def __init__(self, method="GET", response_class=None, summary=None, is_list=False):
         self.method = method
         self.nickname = method
         self.response_class = response_class
         self.summary = summary
         self.parameters = []
+        self.is_list = is_list
 
     def add_parameter(self, parameter):
         self.parameters.append(parameter)
 
-    def as_dict(self):
+    def as_dict(self, model_wrapper=None):
+        response_class = self.response_class
+
+        if self.response_class:
+            if model_wrapper:
+                response_class = wrap_model_type(self.response_class, self.is_list)
+            else:
+                response_class = self.response_class
+
         return {
             "httpMethod": self.method,
             "nickname": self.method,
-            "responseClass": self.response_class,
+            "responseClass": response_class,
             "summary": self.summary,
             "parameters": [param.as_dict() for param in self.parameters]
         }
 
 class SwaggerResponseWrapper(object):
 
-    def __init__(self, base_path="", api_version="", apis=None, docs_path="/"):
+    def __init__(self, base_path="", api_version="", apis=None, docs_path="/", model_wrapper=None, extra_models=None):
         self.base_path = base_path
         self.api_version = api_version
         self.apis = apis
         self.docs_path = docs_path
+        self.model_wrapper = model_wrapper
+        self.extra_models = extra_models
 
     def as_dict(self):
 
-        dict = {
+        response_dict = {
             "apiVersion": self.api_version,
             "swaggerVersion": "1.1",
             "basePath": self.base_path
         }
 
         if self.apis:
-            dict["apis"] = [api.as_dict(docs_path=self.docs_path) for api in self.apis]
+            response_dict["apis"] = [api.as_dict(docs_path=self.docs_path) for api in self.apis]
         models = {}
         for api in self.apis:
             if api.model:
                 models[api.model["id"]] = api.model
+                if self.model_wrapper:
+                    wrapper_copy = deepcopy(self.model_wrapper)
+                    wrapper_name = api.model["id"] + "Wrapper"
+                    wrapper_copy["data"]["type"] = api.model["id"]
+                    models[wrapper_name] = {"id": wrapper_name, "properties": wrapper_copy}
 
-        dict["models"] = models
-        return dict
+                    wrapper_list_copy = deepcopy(self.model_wrapper)
+                    list_wrapper_name = api.model["id"] + "ListWrapper"
+                    wrapper_list_copy["data"]["type"] = "Array"
+                    wrapper_list_copy["data"]["items"] = {"$ref": api.model["id"]}
+                    models[list_wrapper_name] = {"id": list_wrapper_name, "properties": wrapper_list_copy}
+
+        response_dict["models"] = models
+        if self.extra_models:
+            response_dict["models"] = dict(self.extra_models.items() + response_dict["models"].items())
+        return response_dict
 
 class SwaggerDocumentationGenerator(DocumentationGenerator):
 
-
-    def __init__(self, urlpatterns=None, base_path="", server_url="", docs_path=""):
+    def __init__(self, urlpatterns=None, base_path="", server_url="", docs_path="", model_wrapper=None, extra_models=None):
         self.urlpatterns = urlpatterns
         self.base_path = base_path
         self.server_url = server_url
         self.docs_path = docs_path
+
+        #extra_models are used if your model_wrapper references any other models
+        self.extra_models = extra_models
+
+        #set the model_wrapper to a dict with a swagger representation of the object you want to wrap the model in
+        #the data-attribute of the model_wrapper will be set to the model
+        self.model_wrapper = model_wrapper
         self.base_api = self.generate_apis()
 
     def get_docs(self, path=None):
@@ -255,7 +286,9 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
             base_path = self.server_url + "/" + self.base_path,
             api_version = "2.0",
             apis = children,
-            docs_path = docs_path
+            docs_path = docs_path,
+            model_wrapper = self.model_wrapper,
+            extra_models = self.extra_models
         )
 
         return jsonpickle.encode(response.as_dict(), unpicklable=False)
@@ -286,7 +319,8 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
                     methods = self.__get_allowed_methods__(endpoint),
                     docstring = self.__parse_docstring__(endpoint),
                     view=endpoint.callback.cls_instance,
-                    url_parameters = url_params
+                    url_parameters = url_params,
+                    model_wrapper = self.model_wrapper
                 )
 
                 child.add_child(api)
@@ -306,3 +340,10 @@ def map_django_model(django_model):
     if django_model in mappings:
         return mappings[django_model]
     return None
+
+
+def wrap_model_type(model_type, is_list):
+    if is_list:
+        return model_type + "ListWrapper"
+    else:
+        return model_type + "Wrapper"

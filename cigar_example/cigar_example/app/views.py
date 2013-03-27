@@ -14,7 +14,19 @@ class ApiDocumentation(APIView):
         return Response(json.loads(docs))
 
 
-doc_generator = SwaggerDocumentationGenerator(urls.urlpatterns, "api/v2/", "http://143.97.90.77:8000", "/swagger/")
+
+
+extra_models = {"User": {"id": "User", "properties": {"id": {"type": "int"}}}, "Revision": {"id": "Revision", "properties": {"id": {"type": "int"}, "comment": {"type": "string"}, "process_record": {"type": "int"}, "date": {"type": "string"}, "user": {"type": "User"}}}}
+model_wrapper = {"data": {"type": "MODEL"}, "revision": {"type": "Revision"}}
+
+doc_generator = SwaggerDocumentationGenerator(
+    urlpatterns=urls.urlpatterns,
+    base_path="api/v2/",
+    server_url="http://143.97.90.77:8000",
+    docs_path="/swagger/",
+    model_wrapper=model_wrapper,
+    extra_models=extra_models
+    )
 
 class SwaggerApiDocumentation(APIView):
     """
