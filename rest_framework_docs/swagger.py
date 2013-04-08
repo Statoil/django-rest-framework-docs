@@ -337,6 +337,7 @@ def map_django_model(django_model):
         "ForeignKey": "int",
         "BooleanField": "boolean",
         "PositiveIntegerField": "int",
+        "DateTimeField": "Date"
     }
     if django_model in mappings:
         return mappings[django_model]
