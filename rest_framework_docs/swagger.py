@@ -204,7 +204,10 @@ class SwaggerOperationObject(object):
             if model_wrapper:
                 response_class = wrap_model_type(self.response_class, self.is_list)
             else:
-                response_class = self.response_class
+                if self.is_list:
+                    response_class = "Array[" + self.response_class + "]"
+                else:
+                    response_class = self.response_class
 
         return {
             "httpMethod": self.method,
@@ -294,7 +297,7 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         return jsonpickle.encode(response.as_dict(), unpicklable=False)
 
 
-    def generate_api(self, base_api, path, endpoint, sub, exclude_param=None):
+    def generate_api(self, base_api, path, endpoint, sub, use_wrapper=True, exclude_param=None):
 
         child = base_api.get_child(path)
         if not child:
@@ -306,13 +309,18 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         if exclude_param and exclude_param in url_params:
             del url_params[exclude_param]
 
+        if use_wrapper:
+            model_wrapper = self.model_wrapper
+        else:
+            model_wrapper = None
+
         api = Api(
             path = sub,
             methods = self.__get_allowed_methods__(endpoint),
             docstring = self.__parse_docstring__(endpoint),
             view=endpoint.callback.cls_instance,
             url_parameters = url_params,
-            model_wrapper = self.model_wrapper
+            model_wrapper = model_wrapper
         )
 
         child.add_child(api)
@@ -329,6 +337,11 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
                     path = split[0]
                     sub = split[1]
 
+                use_wrapper = True
+                if hasattr(endpoint.callback.cls_instance, "wrapper"):
+                    if endpoint.callback.cls_instance.wrapper is False:
+                        use_wrapper = False
+
                 #handle substitutions
                 if hasattr(endpoint.callback.cls_instance, 'param_mappings'):
                     for key, value in endpoint.callback.cls_instance.param_mappings.iteritems():
@@ -336,9 +349,9 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
                         if parameter in path:
                             for substitute in value:
                                 p = path.replace(parameter, substitute)
-                                self.generate_api(base_api, p, endpoint, sub, key)
+                                self.generate_api(base_api, p, endpoint, sub, use_wrapper=use_wrapper, exclude_param=key)
                 else:
-                    self.generate_api(base_api, path, endpoint, sub)
+                    self.generate_api(base_api, path, endpoint, sub, use_wrapper=use_wrapper)
 
         return base_api
 
