@@ -294,6 +294,29 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
         return jsonpickle.encode(response.as_dict(), unpicklable=False)
 
 
+    def generate_api(self, base_api, path, endpoint, sub, exclude_param=None):
+
+        child = base_api.get_child(path)
+        if not child:
+            child = Api(path=path)
+            base_api.add_child(child)
+
+        regex = re.compile(endpoint.regex.pattern)
+        url_params = regex.groupindex
+        if exclude_param and exclude_param in url_params:
+            del url_params[exclude_param]
+
+        api = Api(
+            path = sub,
+            methods = self.__get_allowed_methods__(endpoint),
+            docstring = self.__parse_docstring__(endpoint),
+            view=endpoint.callback.cls_instance,
+            url_parameters = url_params,
+            model_wrapper = self.model_wrapper
+        )
+
+        child.add_child(api)
+
     def generate_apis(self):
 
         base_api = Api(path="/")
@@ -306,24 +329,17 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
                     path = split[0]
                     sub = split[1]
 
-                child = base_api.get_child(path)
-                if not child:
-                    child = Api(path=path)
-                    base_api.add_child(child)
+                #handle substitutions
+                if hasattr(endpoint.callback.cls_instance, 'param_mappings'):
+                    for key, value in endpoint.callback.cls_instance.param_mappings.iteritems():
+                        parameter = "{"+ key + "}"
+                        if parameter in path:
+                            for substitute in value:
+                                p = path.replace(parameter, substitute)
+                                self.generate_api(base_api, p, endpoint, sub, key)
+                else:
+                    self.generate_api(base_api, path, endpoint, sub)
 
-                regex = re.compile(endpoint.regex.pattern)
-                url_params = regex.groupindex
-
-                api = Api(
-                    path = sub,
-                    methods = self.__get_allowed_methods__(endpoint),
-                    docstring = self.__parse_docstring__(endpoint),
-                    view=endpoint.callback.cls_instance,
-                    url_parameters = url_params,
-                    model_wrapper = self.model_wrapper
-                )
-
-                child.add_child(api)
         return base_api
 
 #TODO: get this from somewhere more robust

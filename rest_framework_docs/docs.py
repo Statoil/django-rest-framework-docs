@@ -148,7 +148,7 @@ class DocumentationGenerator():
         try:  # Get the URL
             cleaned = endpoint.regex.pattern
             cleaned = re.sub('\([^<]*<', '{', cleaned)
-            cleaned = re.sub('>[^\)]*\)', '_id}', cleaned)
+            cleaned = re.sub('>[^\)]*\)', '}', cleaned)
             cleaned = re.sub('^\^|/\??\$$', '', cleaned)
             cleaned = re.sub('\$$', '', cleaned)
             return cleaned
