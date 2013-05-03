@@ -81,16 +81,27 @@ class Api(object):
         )
 
         #automagically set model as body param for POST and PUT
-        if method in ["POST", "PUT"] and hasattr(self.view, "get_swagger_response_class"):
+        if method in ["POST", "PUT", "DELETE"] and hasattr(self.view, "get_swagger_response_class"):
             model_type = self.view.get_swagger_response_class()
+            if method in ["POST", "PUT"]:
+                parameter = SwaggerParameter(
+                    data_type=model_type,
+                    name=model_type,
+                    allow_multiple=is_list,
+                )
+                operation.add_parameter(parameter)
 
-            parameter = SwaggerParameter(
-                data_type=model_type,
-                name=model_type,
-                allow_multiple=is_list,
-            )
-            operation.add_parameter(parameter)
+            if method == "DELETE" and hasattr(self.view, "get_swagger_delete_parameter_type"):
+                delete_model_type = self.view.get_swagger_delete_parameter_type()
+                parameter = SwaggerParameter(
+                    data_type=delete_model_type,
+                    name=delete_model_type,
+                    allow_multiple=is_list,
+                )
+                operation.add_parameter(parameter)
+
             operation.response_class = model_type
+
 
         #add params from url TODO: infer type
         if self.url_parameters:
