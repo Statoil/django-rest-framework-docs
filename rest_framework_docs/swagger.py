@@ -87,9 +87,10 @@ class Api(object):
             parameter = SwaggerParameter(
                 data_type=model_type,
                 name=model_type,
-                allow_multiple=is_list
+                allow_multiple=is_list,
             )
             operation.add_parameter(parameter)
+            operation.response_class = model_type
 
         #add params from url TODO: infer type
         if self.url_parameters:
