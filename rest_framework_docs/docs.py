@@ -169,7 +169,7 @@ class DocumentationGenerator():
         Gets allowed methods for the API. (ie. POST, PUT, GET)
         """
         try:  # Get the allowed methods
-            return endpoint.callback.cls_instance.allowed_methods
+            return endpoint.callback.cls().allowed_methods
         except:
             pass
 

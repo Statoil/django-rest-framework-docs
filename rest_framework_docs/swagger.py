@@ -312,7 +312,7 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
             path = sub,
             methods = self.__get_allowed_methods__(endpoint),
             docstring = self.__parse_docstring__(endpoint),
-            view=endpoint.callback.cls_instance,
+            view=endpoint.callback.cls,
             url_parameters = url_params
         )
 
@@ -331,8 +331,8 @@ class SwaggerDocumentationGenerator(DocumentationGenerator):
                     sub = split[1]
 
                 #handle substitutions
-                if hasattr(endpoint.callback.cls_instance, 'param_mappings'):
-                    param_mappings = endpoint.callback.cls_instance.param_mappings
+                if hasattr(endpoint.callback.cls, 'param_mappings'):
+                    param_mappings = endpoint.callback.cls.param_mappings
                     for key, value in param_mappings.iteritems():
                         parameter = "{"+ key + "}"
                         if parameter in path:
